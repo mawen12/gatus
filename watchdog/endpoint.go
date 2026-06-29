@@ -12,6 +12,7 @@ import (
 )
 
 // monitorEndpoint a single endpoint in a loop
+// monitorEndpoint 以一个循环监控
 func monitorEndpoint(ep *endpoint.Endpoint, cfg *config.Config, extraLabels []string, ctx context.Context) {
 	// Run it immediately on start
 	executeEndpoint(ep, cfg, extraLabels)
@@ -46,6 +47,7 @@ func executeEndpoint(ep *endpoint.Endpoint, cfg *config.Config, extraLabels []st
 		return
 	}
 	logr.Debugf("[watchdog.executeEndpoint] Monitoring group=%s; endpoint=%s; key=%s", ep.Group, ep.Name, ep.Key())
+	//
 	result := ep.EvaluateHealth()
 	if cfg.Metrics {
 		metrics.PublishMetricsForEndpoint(ep, result, extraLabels)
@@ -56,6 +58,7 @@ func executeEndpoint(ep *endpoint.Endpoint, cfg *config.Config, extraLabels []st
 	} else {
 		logr.Infof("[watchdog.executeEndpoint] Monitored group=%s; endpoint=%s; key=%s; success=%v; errors=%d; duration=%s", ep.Group, ep.Name, ep.Key(), result.Success, len(result.Errors), result.Duration.Round(time.Millisecond))
 	}
+	// 检查是否位于维护期内
 	inEndpointMaintenanceWindow := false
 	for _, maintenanceWindow := range ep.MaintenanceWindows {
 		if maintenanceWindow.IsUnderMaintenance() {
@@ -63,6 +66,7 @@ func executeEndpoint(ep *endpoint.Endpoint, cfg *config.Config, extraLabels []st
 			inEndpointMaintenanceWindow = true
 		}
 	}
+
 	if !cfg.Maintenance.IsUnderMaintenance() && !inEndpointMaintenanceWindow {
 		HandleAlerting(ep, result, cfg.Alerting)
 	} else {

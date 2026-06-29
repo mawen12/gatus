@@ -22,6 +22,7 @@ var (
 // Alert is endpoint.Endpoint's alert configuration
 type Alert struct {
 	// Type of alert (required)
+	// 告警类型，gatus 支持丰富的告警
 	Type Type `yaml:"type"`
 
 	// Enabled defines whether the alert is enabled
@@ -30,35 +31,43 @@ type Alert struct {
 	//
 	// This is a pointer, because it is populated by YAML and we need to know whether it was explicitly set to a value
 	// or not for provider.ParseWithDefaultAlert to work.
+	// Enabled 是否开启告警通知
 	Enabled *bool `yaml:"enabled,omitempty"`
 
 	// FailureThreshold is the number of failures in a row needed before triggering the alert
+	// FailureThreshold 触发警报前所需的连续失败次数
 	FailureThreshold int `yaml:"failure-threshold"`
 
 	// SuccessThreshold defines how many successful executions must happen in a row before an ongoing incident is marked as resolved
+	// SuccessThreshold 在将正在进行的事件标记为已解决之前，必须连续发生多少次成功执行
 	SuccessThreshold int `yaml:"success-threshold"`
 
 	// MinimumReminderInterval is the interval between reminders
+	// MinimumReminderInterval 两次提醒之间的时间间隔
 	MinimumReminderInterval time.Duration `yaml:"minimum-reminder-interval,omitempty"`
 
 	// Description of the alert. Will be included in the alert sent.
 	//
 	// This is a pointer, because it is populated by YAML and we need to know whether it was explicitly set to a value
 	// or not for provider.ParseWithDefaultAlert to work.
+	// Description 告警的描述，将被包含在发送的告警中
 	Description *string `yaml:"description,omitempty"`
 
 	// SendOnResolved defines whether to send a second notification when the issue has been resolved
 	//
 	// This is a pointer, because it is populated by YAML and we need to know whether it was explicitly set to a value
 	// or not for provider.ParseWithDefaultAlert to work. Use Alert.IsSendingOnResolved() for a non-pointer
+	// SendOnResolved 检查当问题被解决时，是否发送二次通知
 	SendOnResolved *bool `yaml:"send-on-resolved,omitempty"`
 
 	// ProviderOverride is an optional field that can be used to override the provider's configuration
 	// It is freeform so that it can be used for any provider-specific configuration.
+	// ProviderOverride 用于覆盖 provider 的配置
 	ProviderOverride map[string]any `yaml:"provider-override,omitempty"`
 
 	// ResolveKey is an optional field that is used by some providers (i.e. PagerDuty's dedup_key) to resolve
 	// ongoing/triggered incidents
+	// ResolveKey 被某些 provider 所使用
 	ResolveKey string `yaml:"-"`
 
 	// Triggered is used to determine whether an alert has been triggered. When an alert is resolved, this value
@@ -69,6 +78,7 @@ type Alert struct {
 	// applied for alerts that are already triggered and has become "healthy" again is to prevent a case where, for
 	// some reason, the alert provider always returns errors when trying to send the resolved notification
 	// (SendOnResolved).
+	// Triggered 检查 alert 是否已经被触发，当该警告被解决，该值需要恢复为 false。这被用于防止同一告警被重复发送。
 	Triggered bool `yaml:"-"`
 }
 

@@ -117,6 +117,7 @@ func Get() Store {
 }
 
 // Initialize instantiates the storage provider based on the Config provider
+// Initialize 根据配置初始化存储
 func Initialize(cfg *storage.Config) error {
 	initialized = true
 	var err error

@@ -178,6 +178,7 @@ type Config struct {
 
 // GetAlertingProviderByAlertType returns an provider.AlertProvider by its corresponding alert.Type
 func (config *Config) GetAlertingProviderByAlertType(alertType alert.Type) provider.AlertProvider {
+	// 使用反射读取
 	entityType := reflect.TypeOf(config).Elem()
 	for i := 0; i < entityType.NumField(); i++ {
 		field := entityType.Field(i)

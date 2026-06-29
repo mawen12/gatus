@@ -171,6 +171,7 @@ func (config *Config) GetExternalEndpointByKey(key string) *endpoint.ExternalEnd
 
 // HasLoadedConfigurationBeenModified returns whether one of the file that the
 // configuration has been loaded from has been modified since it was last read
+// HasLoadedConfigurationBeenModified 读取配置文件是否发生更改
 func (config *Config) HasLoadedConfigurationBeenModified() bool {
 	lastMod := config.lastFileModTime.Unix()
 	fileInfo, err := os.Stat(config.configPath)
@@ -201,6 +202,7 @@ func LoadConfiguration(configPath string) (*Config, error) {
 	var fileInfo os.FileInfo
 	var usedConfigPath string
 	// Figure out what config path we'll use (either configPath or the default config path)
+	// 评估可以使用的配置文件路径
 	for _, configurationPath := range []string{configPath, DefaultConfigurationFilePath, DefaultFallbackConfigurationFilePath} {
 		if len(configurationPath) == 0 {
 			continue
@@ -213,31 +215,35 @@ func LoadConfiguration(configPath string) (*Config, error) {
 		usedConfigPath = configurationPath
 		break
 	}
+
 	if len(usedConfigPath) == 0 {
 		return nil, ErrConfigFileNotFound
 	}
 	var config *Config
-	if fileInfo.IsDir() {
+	if fileInfo.IsDir() { // 如果是目录，则读取目录下所有的文件
 		err := walkConfigDir(configPath, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return fmt.Errorf("error walking path %s: %w", path, err)
 			}
+			// 忽略 .. 的特殊目录，这是用于回到上一级
 			if strings.Contains(path, "..") {
 				logr.Warnf("[config.LoadConfiguration] Ignoring configuration from %s", path)
 				return nil
 			}
 			logr.Infof("[config.LoadConfiguration] Reading configuration from %s", path)
+			// 读取文件
 			data, err := os.ReadFile(path)
 			if err != nil {
 				return fmt.Errorf("error reading configuration from file %s: %w", path, err)
 			}
+			// 对文件内容进行合并
 			configBytes, err = deepmerge.YAML(configBytes, data)
 			return err
 		})
 		if err != nil {
 			return nil, fmt.Errorf("error reading configuration from directory %s: %w", usedConfigPath, err)
 		}
-	} else {
+	} else { // 直接读取文件
 		logr.Infof("[config.LoadConfiguration] Reading configuration from configFile=%s", usedConfigPath)
 		if data, err := os.ReadFile(usedConfigPath); err != nil {
 			return nil, fmt.Errorf("error reading configuration from directory %s: %w", usedConfigPath, err)
@@ -245,9 +251,11 @@ func LoadConfiguration(configPath string) (*Config, error) {
 			configBytes = data
 		}
 	}
+
 	if len(configBytes) == 0 {
 		return nil, ErrConfigFileNotFound
 	}
+	// 解析为 config 对象
 	config, err := parseAndValidateConfigBytes(configBytes)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing config: %w", err)
@@ -258,6 +266,7 @@ func LoadConfiguration(configPath string) (*Config, error) {
 }
 
 // walkConfigDir is a wrapper for filepath.WalkDir that strips directories and non-config files
+// walkConfigDir 扫描 path 下的 .yml 和 .yaml 文件，并支持给定的函数
 func walkConfigDir(path string, fn fs.WalkDirFunc) error {
 	if len(path) == 0 {
 		// If the user didn't provide a directory, we'll just use the default config file, so we can return nil now.
@@ -279,13 +288,17 @@ func walkConfigDir(path string, fn fs.WalkDirFunc) error {
 }
 
 // parseAndValidateConfigBytes parses a Gatus configuration file into a Config struct and validates its parameters
+// parseAndValidateConfigBytes 解析并校验配置项
 func parseAndValidateConfigBytes(yamlBytes []byte) (config *Config, err error) {
 	// Replace $$ with __GATUS_LITERAL_DOLLAR_SIGN__ to prevent os.ExpandEnv from treating "$$" as if it was an
 	// environment variable. This allows Gatus to support literal "$" in the configuration file.
+	// 将所有 $$ 替换为 __GATUS_LITERAL_DOLLAR_SIGN__，以避免被 env 识别为环境变量
 	yamlBytes = []byte(strings.ReplaceAll(string(yamlBytes), "$$", "__GATUS_LITERAL_DOLLAR_SIGN__"))
 	// Expand environment variables
+	// 将配置中的 $ 使用环境变量替换
 	yamlBytes = []byte(os.ExpandEnv(string(yamlBytes)))
 	// Replace __GATUS_LITERAL_DOLLAR_SIGN__ with "$" to restore the literal "$" in the configuration file
+	// 将 __GATUS_LITERAL_DOLLAR_SIGN__ 重新恢复为 $，以便 gatus 自己能够解析
 	yamlBytes = []byte(strings.ReplaceAll(string(yamlBytes), "__GATUS_LITERAL_DOLLAR_SIGN__", "$"))
 	// Parse configuration file
 	if err = yaml.Unmarshal(yamlBytes, &config); err != nil {
@@ -345,6 +358,7 @@ func parseAndValidateConfigBytes(yamlBytes []byte) (config *Config, err error) {
 	return
 }
 
+// ValidateConnectivityConfig 校验连接活跃度配置
 func ValidateConnectivityConfig(config *Config) error {
 	if config.Connectivity != nil {
 		return config.Connectivity.ValidateAndSetDefaults()
@@ -405,6 +419,7 @@ func resolveTunnelForClientConfig(config *Config, clientConfig *client.Config) e
 	return nil
 }
 
+// ValidateAnnouncementsConfig 校验系统通告配置
 func ValidateAnnouncementsConfig(config *Config) error {
 	if config.Announcements != nil {
 		if err := announcement.ValidateAndSetDefaults(config.Announcements); err != nil {
@@ -416,6 +431,7 @@ func ValidateAnnouncementsConfig(config *Config) error {
 	return nil
 }
 
+// ValidateRemoteConfig 校验远程配置
 func ValidateRemoteConfig(config *Config) error {
 	if config.Remote != nil {
 		if err := config.Remote.ValidateAndSetDefaults(); err != nil {
@@ -425,6 +441,7 @@ func ValidateRemoteConfig(config *Config) error {
 	return nil
 }
 
+// ValidateStorageConfig 校验存储配置
 func ValidateStorageConfig(config *Config) error {
 	if config.Storage == nil {
 		config.Storage = &storage.Config{
@@ -440,6 +457,7 @@ func ValidateStorageConfig(config *Config) error {
 	return nil
 }
 
+// ValidateMaintenanceConfig 校验维护信息
 func ValidateMaintenanceConfig(config *Config) error {
 	if config.Maintenance == nil {
 		config.Maintenance = maintenance.GetDefaultConfig()
@@ -451,6 +469,7 @@ func ValidateMaintenanceConfig(config *Config) error {
 	return nil
 }
 
+// ValidateUIConfig 校验 ui 配置
 func ValidateUIConfig(config *Config) error {
 	if config.UI == nil {
 		config.UI = ui.GetDefaultConfig()
@@ -462,6 +481,7 @@ func ValidateUIConfig(config *Config) error {
 	return nil
 }
 
+// ValidateWebConfig 校验 web 参数
 func ValidateWebConfig(config *Config) error {
 	if config.Web == nil {
 		config.Web = web.GetDefaultConfig()
@@ -471,6 +491,7 @@ func ValidateWebConfig(config *Config) error {
 	return nil
 }
 
+// ValidateEndpointsConfig 校验 endpoint 和 externalEndpoint 配置，并检测重复项
 func ValidateEndpointsConfig(config *Config) error {
 	duplicateValidationMap := make(map[string]bool)
 	// Validate endpoints
@@ -537,6 +558,7 @@ func ValidateSuitesConfig(config *Config) error {
 	return nil
 }
 
+// ValidateUniqueKeys 校验唯一性配置
 func ValidateUniqueKeys(config *Config) error {
 	keyMap := make(map[string]string) // key -> description for error messages
 	// Check all endpoints
@@ -574,6 +596,7 @@ func ValidateUniqueKeys(config *Config) error {
 	return nil
 }
 
+// ValidateSecurityConfig 校验安全相关的配置
 func ValidateSecurityConfig(config *Config) error {
 	if config.Security != nil {
 		if !config.Security.ValidateAndSetDefaults() {
@@ -588,6 +611,7 @@ func ValidateSecurityConfig(config *Config) error {
 // Note that the alerting configuration has to be validated before the endpoint configuration, because the default alert
 // returned by provider.AlertProvider.GetDefaultAlert() must be parsed before endpoint.Endpoint.ValidateAndSetDefaults()
 // sets the default alert values when none are set.
+// ValidateAlertingConfig 校验配置文件中的告警配置，并对 endpoint 和 externalEndpoint 进行按需覆盖和校验
 func ValidateAlertingConfig(alertingConfig *alerting.Config, endpoints []*endpoint.Endpoint, externalEndpoints []*endpoint.ExternalEndpoint) {
 	if alertingConfig == nil {
 		logr.Info("[config.ValidateAlertingConfig] Alerting is not configured")
@@ -643,7 +667,7 @@ func ValidateAlertingConfig(alertingConfig *alerting.Config, endpoints []*endpoi
 			if err := alertProvider.Validate(); err == nil {
 				// Parse alerts with the provider's default alert
 				if alertProvider.GetDefaultAlert() != nil {
-					for _, ep := range endpoints {
+					for _, ep := range endpoints { // 处理外部的 endpoint alert 配置覆盖
 						for alertIndex, endpointAlert := range ep.Alerts {
 							if alertType == endpointAlert.Type {
 								logr.Debugf("[config.ValidateAlertingConfig] Parsing alert %d with default alert for provider=%s in endpoint with key=%s", alertIndex, alertType, ep.Key())
@@ -657,7 +681,7 @@ func ValidateAlertingConfig(alertingConfig *alerting.Config, endpoints []*endpoi
 							}
 						}
 					}
-					for _, ee := range externalEndpoints {
+					for _, ee := range externalEndpoints { // 处理内部的 endpoint alert 配置覆盖
 						for alertIndex, endpointAlert := range ee.Alerts {
 							if alertType == endpointAlert.Type {
 								logr.Debugf("[config.ValidateAlertingConfig] Parsing alert %d with default alert for provider=%s in endpoint with key=%s", alertIndex, alertType, ee.Key())
@@ -685,6 +709,7 @@ func ValidateAlertingConfig(alertingConfig *alerting.Config, endpoints []*endpoi
 	logr.Infof("[config.ValidateAlertingConfig] configuredProviders=%s; ignoredProviders=%s", validProviders, invalidProviders)
 }
 
+// ValidateAndSetConcurrencyDefaults 校验并发查询配置
 func ValidateAndSetConcurrencyDefaults(config *Config) {
 	if config.DisableMonitoringLock {
 		config.Concurrency = 0

@@ -15,6 +15,7 @@ var (
 )
 
 // Handle creates the router and starts the server
+// Handle 创建 app 路由，并启动服务
 func Handle(cfg *config.Config) {
 	api := api.New(cfg)
 	app = api.Router()

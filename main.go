@@ -22,6 +22,7 @@ const (
 )
 
 func main() {
+	// 启动延迟
 	if delayInSeconds, _ := strconv.Atoi(os.Getenv("GATUS_DELAY_START_SECONDS")); delayInSeconds > 0 {
 		logr.Infof("Delaying start by %d seconds", delayInSeconds)
 		time.Sleep(time.Duration(delayInSeconds) * time.Second)
@@ -31,13 +32,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	//
 	initializeStorage(cfg)
 	start(cfg)
 	// Wait for termination signal
-	signalChannel := make(chan os.Signal, 1)
+	signalChannel := make(chan os.Signal, 1) // 退出信号
 	done := make(chan bool, 1)
-	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
-	go func() {
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM) // 监听系统打断和 SIGTERM 信号
+	go func() {                                                 // TODO by mawen 也许此处不需要异步
 		<-signalChannel
 		logr.Info("Received termination signal, attempting to gracefully shut down")
 		stop(cfg)
@@ -48,11 +50,12 @@ func main() {
 	logr.Info("Shutting down")
 }
 
+// start 启动 gatus
 func start(cfg *config.Config) {
-	go controller.Handle(cfg)
+	go controller.Handle(cfg) // 异步启动 server
 	metrics.InitializePrometheusMetrics(cfg, nil)
-	watchdog.Monitor(cfg)
-	go listenToConfigurationFileChanges(cfg)
+	watchdog.Monitor(cfg)                    // 启动访问 endpoint，每个 endpoint 延迟 222，避免并发导致服务器压力过大
+	go listenToConfigurationFileChanges(cfg) //
 }
 
 func stop(cfg *config.Config) {
@@ -68,6 +71,7 @@ func save() {
 	}
 }
 
+// configureLogging 基于环境变量配置日志级别，底层使用 logger.Logger
 func configureLogging() {
 	logLevelAsString := os.Getenv(GatusLogLevelEnvVar)
 	if logLevel, err := logr.LevelFromString(logLevelAsString); err != nil {
@@ -83,6 +87,7 @@ func configureLogging() {
 	}
 }
 
+// loadConfiguration 从环境变量中读取配置文件路径
 func loadConfiguration() (*config.Config, error) {
 	configPath := os.Getenv(GatusConfigPathEnvVar)
 	// Backwards compatibility
@@ -223,14 +228,17 @@ func closeTunnels(cfg *config.Config) {
 	}
 }
 
+// 监听应用配置，当配置的编辑时间变化时，重新应用
 func listenToConfigurationFileChanges(cfg *config.Config) {
 	for {
 		time.Sleep(30 * time.Second)
+
 		if cfg.HasLoadedConfigurationBeenModified() {
 			logr.Info("[main.listenToConfigurationFileChanges] Configuration file has been modified")
 			stop(cfg)
 			time.Sleep(time.Second) // Wait a bit to make sure everything is done.
 			save()
+			// 重新加载配置
 			updatedConfig, err := loadConfiguration()
 			if err != nil {
 				if cfg.SkipInvalidConfigUpdate {

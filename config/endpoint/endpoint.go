@@ -299,9 +299,9 @@ func (e *Endpoint) EvaluateHealthWithContext(context *gontext.Gontext) *Result {
 		processedEndpoint = e.preprocessWithContext(result, context)
 	}
 	// Parse or extract hostname from URL
-	if processedEndpoint.DNSConfig != nil {
+	if processedEndpoint.DNSConfig != nil { // 如果配置了 DNS，则需要从其中解析 hostname
 		result.Hostname = strings.TrimSuffix(processedEndpoint.URL, ":53")
-	} else if processedEndpoint.Type() == TypeICMP {
+	} else if processedEndpoint.Type() == TypeICMP { // 对于 ICMP ，需要添加指定的前缀协议
 		// To handle IPv6 addresses, we need to handle the hostname differently here. This is to avoid, for instance,
 		// "1111:2222:3333::4444" being displayed as "1111:2222:3333:" because :4444 would be interpreted as a port.
 		result.Hostname = strings.TrimPrefix(processedEndpoint.URL, "icmp://")
@@ -328,38 +328,50 @@ func (e *Endpoint) EvaluateHealthWithContext(context *gontext.Gontext) *Result {
 	// Call the endpoint (if there's no errors)
 	if len(result.Errors) == 0 {
 		processedEndpoint.call(result)
-	} else {
+	} else { // 预检查失败则不进行调用
 		result.Success = false
 	}
 	// Evaluate the conditions
-	for _, condition := range processedEndpoint.Conditions {
+	for _, condition := range processedEndpoint.Conditions { // 进行条件检查
 		success := condition.evaluate(result, processedEndpoint.UIConfig.DontResolveFailedConditions, processedEndpoint.UIConfig.ResolveSuccessfulConditions, context)
 		if !success {
 			result.Success = false
 		}
 	}
 	result.Timestamp = time.Now()
+	// ###################################
+	// 处理结果集
+	// ###################################
 	// Clean up parameters that we don't need to keep in the results
+	// 隐藏 URL
 	if processedEndpoint.UIConfig.HideURL {
 		for errIdx, errorString := range result.Errors {
 			result.Errors[errIdx] = strings.ReplaceAll(errorString, processedEndpoint.URL, "<redacted>")
 		}
 	}
+	// 是否隐藏主机名
 	if processedEndpoint.UIConfig.HideHostname {
+		// 隐藏结果集中的主机名
 		for errIdx, errorString := range result.Errors {
 			result.Errors[errIdx] = strings.ReplaceAll(errorString, result.Hostname, "<redacted>")
 		}
+		// 隐藏请求主机名
 		result.Hostname = "" // remove it from the result so it doesn't get exposed
 	}
+	// 是否隐藏端口
 	if processedEndpoint.UIConfig.HidePort && len(result.port) > 0 {
+		// 隐藏结果集中的端口
 		for errIdx, errorString := range result.Errors {
 			result.Errors[errIdx] = strings.ReplaceAll(errorString, result.port, "<redacted>")
 		}
+		// 隐藏请求端口
 		result.port = ""
 	}
+	// 是否隐藏错误
 	if processedEndpoint.UIConfig.HideErrors {
 		result.Errors = nil
 	}
+	// 是否隐藏条件
 	if processedEndpoint.UIConfig.HideConditions {
 		result.ConditionResults = nil
 	}
@@ -453,18 +465,18 @@ func (e *Endpoint) call(result *Result) {
 	var err error
 	var certificate *x509.Certificate
 	endpointType := e.Type()
-	if endpointType == TypeHTTP {
+	if endpointType == TypeHTTP { // HTTP 请求
 		request = e.buildHTTPRequest()
 	}
 	startTime := time.Now()
-	if endpointType == TypeDNS {
+	if endpointType == TypeDNS { // DNS 请求
 		result.Connected, result.DNSRCode, result.Body, err = client.QueryDNS(e.DNSConfig.QueryType, e.DNSConfig.QueryName, e.URL)
 		if err != nil {
 			result.AddError(err.Error())
 			return
 		}
 		result.Duration = time.Since(startTime)
-	} else if endpointType == TypeSTARTTLS || endpointType == TypeTLS {
+	} else if endpointType == TypeSTARTTLS || endpointType == TypeTLS { // TLS
 		if endpointType == TypeSTARTTLS {
 			result.Connected, certificate, err = client.CanPerformStartTLS(strings.TrimPrefix(e.URL, "starttls://"), e.ClientConfig)
 		} else {
@@ -476,18 +488,18 @@ func (e *Endpoint) call(result *Result) {
 		}
 		result.Duration = time.Since(startTime)
 		result.CertificateExpiration = time.Until(certificate.NotAfter)
-	} else if endpointType == TypeTCP {
+	} else if endpointType == TypeTCP { // TCP
 		result.Connected, result.Body = client.CanCreateNetworkConnection("tcp", strings.TrimPrefix(e.URL, "tcp://"), e.getParsedBody(), e.ClientConfig)
 		result.Duration = time.Since(startTime)
-	} else if endpointType == TypeUDP {
+	} else if endpointType == TypeUDP { // UDP
 		result.Connected, result.Body = client.CanCreateNetworkConnection("udp", strings.TrimPrefix(e.URL, "udp://"), e.getParsedBody(), e.ClientConfig)
 		result.Duration = time.Since(startTime)
-	} else if endpointType == TypeSCTP {
+	} else if endpointType == TypeSCTP { // SCTP
 		result.Connected = client.CanCreateSCTPConnection(strings.TrimPrefix(e.URL, "sctp://"), e.ClientConfig)
 		result.Duration = time.Since(startTime)
-	} else if endpointType == TypeICMP {
+	} else if endpointType == TypeICMP { // ICMP
 		result.Connected, result.Duration = client.Ping(strings.TrimPrefix(e.URL, "icmp://"), e.ClientConfig)
-	} else if endpointType == TypeWS {
+	} else if endpointType == TypeWS { // WS
 		wsHeaders := map[string]string{}
 		if e.Headers != nil {
 			maps.Copy(wsHeaders, e.Headers)
@@ -501,7 +513,7 @@ func (e *Endpoint) call(result *Result) {
 			return
 		}
 		result.Duration = time.Since(startTime)
-	} else if endpointType == TypeSSH {
+	} else if endpointType == TypeSSH { // SSH
 		// If there's no username, password or private key specified, attempt to validate just the SSH banner
 		if e.SSHConfig == nil || (len(e.SSHConfig.Username) == 0 && len(e.SSHConfig.Password) == 0 && len(e.SSHConfig.PrivateKey) == 0) {
 			result.Connected, result.HTTPStatus, err = client.CheckSSHBanner(strings.TrimPrefix(e.URL, "ssh://"), e.ClientConfig)
@@ -530,7 +542,7 @@ func (e *Endpoint) call(result *Result) {
 			result.Body = output
 		}
 		result.Duration = time.Since(startTime)
-	} else if endpointType == TypeGRPC {
+	} else if endpointType == TypeGRPC { // GRPC
 		useTLS := strings.HasPrefix(e.URL, "grpcs://")
 		address := strings.TrimPrefix(strings.TrimPrefix(e.URL, "grpcs://"), "grpc://")
 		connected, status, err, duration := client.PerformGRPCHealthCheck(address, useTLS, e.ClientConfig)
@@ -545,20 +557,22 @@ func (e *Endpoint) call(result *Result) {
 		}
 	} else {
 		response, err = client.GetHTTPClient(e.ClientConfig).Do(request)
-		result.Duration = time.Since(startTime)
+		result.Duration = time.Since(startTime) // 计算请求耗时
 		if err != nil {
 			result.AddError(err.Error())
 			return
 		}
 		defer response.Body.Close()
-		if response.TLS != nil && len(response.TLS.PeerCertificates) > 0 {
+		if response.TLS != nil && len(response.TLS.PeerCertificates) > 0 { // 检查 TLS
 			certificate = response.TLS.PeerCertificates[0]
 			result.CertificateExpiration = time.Until(certificate.NotAfter)
 		}
+		// 保存 StatusCode
 		result.HTTPStatus = response.StatusCode
+		// 保存 Connected
 		result.Connected = response.StatusCode > 0
 		// Only read the Body if there's a condition that uses the BodyPlaceholder
-		if e.needsToReadBody() {
+		if e.needsToReadBody() { // 读取请求体
 			result.Body, err = io.ReadAll(response.Body)
 			if err != nil {
 				result.AddError("error reading response body:" + err.Error())

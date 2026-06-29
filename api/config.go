@@ -14,6 +14,7 @@ type ConfigHandler struct {
 	config         *config.Config
 }
 
+// GetConfig 暴露 oidc/authenticated/announcements
 func (handler ConfigHandler) GetConfig(c *fiber.Ctx) error {
 	hasOIDC := false
 	isAuthenticated := true // Default to true if no security config is set

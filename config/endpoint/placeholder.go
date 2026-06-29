@@ -133,27 +133,28 @@ func ResolvePlaceholder(placeholder string, result *Result, ctx *gontext.Gontext
 
 	// Handle CONTEXT placeholders
 	uppercasePlaceholder := strings.ToUpper(placeholder)
+	// 检测 [CONTEXT]
 	if strings.HasPrefix(uppercasePlaceholder, ContextPlaceholder) && ctx != nil {
 		return resolveContextPlaceholder(placeholder, fn, originalPlaceholder, ctx)
 	}
 
 	// Handle basic placeholders (try uppercase first for backward compatibility)
 	switch uppercasePlaceholder {
-	case StatusPlaceholder:
+	case StatusPlaceholder: // [STATUS]
 		return formatWithFunction(strconv.Itoa(result.HTTPStatus), fn), nil
-	case IPPlaceholder:
+	case IPPlaceholder: // [IP]
 		return formatWithFunction(result.IP, fn), nil
-	case ResponseTimePlaceholder:
+	case ResponseTimePlaceholder: // [RESPONSE_TIME]
 		return formatWithFunction(strconv.FormatInt(result.Duration.Milliseconds(), 10), fn), nil
-	case DNSRCodePlaceholder:
+	case DNSRCodePlaceholder: // [DNS_RCODE]
 		return formatWithFunction(result.DNSRCode, fn), nil
-	case ConnectedPlaceholder:
+	case ConnectedPlaceholder: // [CONNECTED]
 		return formatWithFunction(strconv.FormatBool(result.Connected), fn), nil
-	case CertificateExpirationPlaceholder:
+	case CertificateExpirationPlaceholder: // [CERTIFICATE_EXPIRATION]
 		return formatWithFunction(strconv.FormatInt(result.CertificateExpiration.Milliseconds(), 10), fn), nil
-	case DomainExpirationPlaceholder:
+	case DomainExpirationPlaceholder: // [DOMAIN_EXPIRATION]
 		return formatWithFunction(strconv.FormatInt(result.DomainExpiration.Milliseconds(), 10), fn), nil
-	case BodyPlaceholder:
+	case BodyPlaceholder: // [BODY]
 		body := strings.TrimSpace(string(result.Body))
 		if fn == functionHas {
 			return strconv.FormatBool(len(body) > 0), nil
@@ -191,11 +192,14 @@ func ResolvePlaceholder(placeholder string, result *Result, ctx *gontext.Gontext
 }
 
 // extractFunctionWrapper detects and extracts function wrappers (len, has)
+// extractFunctionWrapper 检查并提取函数，支持 has 和 len
 func extractFunctionWrapper(placeholder string) (functionType, string) {
+	// 解析 len()
 	if strings.HasPrefix(placeholder, LengthFunctionPrefix) && strings.HasSuffix(placeholder, FunctionSuffix) {
 		inner := strings.TrimSuffix(strings.TrimPrefix(placeholder, LengthFunctionPrefix), FunctionSuffix)
 		return functionLen, inner
 	}
+	// 解析 has()
 	if strings.HasPrefix(placeholder, HasFunctionPrefix) && strings.HasSuffix(placeholder, FunctionSuffix) {
 		inner := strings.TrimSuffix(strings.TrimPrefix(placeholder, HasFunctionPrefix), FunctionSuffix)
 		return functionHas, inner

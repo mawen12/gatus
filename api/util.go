@@ -16,6 +16,7 @@ const (
 
 func extractPageAndPageSizeFromRequest(c *fiber.Ctx, maximumNumberOfResults int) (page, pageSize int) {
 	var err error
+	// read page
 	if pageParameter := c.Query("page"); len(pageParameter) == 0 {
 		page = DefaultPage
 	} else {
@@ -27,6 +28,7 @@ func extractPageAndPageSizeFromRequest(c *fiber.Ctx, maximumNumberOfResults int)
 			page = DefaultPage
 		}
 	}
+	// read pageSize
 	if pageSizeParameter := c.Query("pageSize"); len(pageSizeParameter) == 0 {
 		pageSize = DefaultPageSize
 	} else {
@@ -35,6 +37,7 @@ func extractPageAndPageSizeFromRequest(c *fiber.Ctx, maximumNumberOfResults int)
 			pageSize = DefaultPageSize
 		}
 	}
+	// 范围检测
 	if page == 1 && pageSize > maximumNumberOfResults {
 		// If the page is 1 and the page size is greater than the maximum number of results, return
 		// no more than the maximum number of results

@@ -66,6 +66,7 @@ type Config[T any] interface {
 }
 
 // MergeProviderDefaultAlertIntoEndpointAlert parses an Endpoint alert by using the provider's default alert as a baseline
+// MergeProviderDefaultAlertIntoEndpointAlert 使用 provider 的配置覆盖 endpoint 中未设置的告警配置
 func MergeProviderDefaultAlertIntoEndpointAlert(providerDefaultAlert, endpointAlert *alert.Alert) {
 	if providerDefaultAlert == nil || endpointAlert == nil {
 		return

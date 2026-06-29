@@ -4,6 +4,8 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"reflect"
+	"runtime"
 
 	"github.com/TwiN/gatus/v5/config"
 	"github.com/TwiN/gatus/v5/config/ui"
@@ -37,6 +39,7 @@ func New(cfg *config.Config) *API {
 		cfg.UI = ui.GetDefaultConfig()
 	}
 	api.router = api.createRouter(cfg)
+	api.printRoutes()
 	return api
 }
 
@@ -54,6 +57,7 @@ func (a *API) createRouter(cfg *config.Config) *fiber.App {
 		Network:        fiber.NetworkTCP,
 		Immutable:      true, // If not enabled, will cause issues due to fiber's zero allocation. See #1268 and https://docs.gofiber.io/#zero-allocation
 	})
+	//
 	if os.Getenv("ENVIRONMENT") == "dev" {
 		app.Use(cors.New(cors.Config{
 			AllowOrigins:     "http://localhost:8081",
@@ -62,9 +66,9 @@ func (a *API) createRouter(cfg *config.Config) *fiber.App {
 	}
 	// Middlewares
 	app.Use(recover.New())
-	app.Use(compress.New())
+	app.Use(compress.New()) // 开启压缩
 	// Define metrics handler, if necessary
-	if cfg.Metrics {
+	if cfg.Metrics { // 暴露 /metrics 端点用于
 		metricsHandler := promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{
 			DisableCompression: true,
 		}))
@@ -93,6 +97,7 @@ func (a *API) createRouter(cfg *config.Config) *fiber.App {
 	app.Get("/suites/:key", SinglePageApplication(cfg.UI))
 	// Health endpoint
 	healthHandler := health.Handler().WithJSON(true)
+	// /health -> {"status": "UP"}
 	app.Get("/health", func(c *fiber.Ctx) error {
 		statusCode, body := healthHandler.GetResponseStatusCodeAndBody()
 		return c.Status(statusCode).Send(body)
@@ -128,9 +133,29 @@ func (a *API) createRouter(cfg *config.Config) *fiber.App {
 			panic(err)
 		}
 	}
+	// 读取所有的 endpoints
 	protectedAPIRouter.Get("/v1/endpoints/statuses", EndpointStatuses(cfg))
+	// 读取指定的 endpoint
 	protectedAPIRouter.Get("/v1/endpoints/:key/statuses", EndpointStatus(cfg))
 	protectedAPIRouter.Get("/v1/suites/statuses", SuiteStatuses(cfg))
 	protectedAPIRouter.Get("/v1/suites/:key/statuses", SuiteStatus(cfg))
 	return app
+}
+
+func (a *API) printRoutes() {
+	for _, routes := range a.router.Stack() {
+		for _, r := range routes {
+			if len(r.Handlers) == 0 {
+				continue
+			}
+
+			for i, h := range r.Handlers {
+				handlerName := "unknown"
+				if fn := runtime.FuncForPC(reflect.ValueOf(h).Pointer()); fn != nil {
+					handlerName = fn.Name()
+				}
+				logr.Infof("[route] method=%s path=%s handler[%d]=%s", r.Method, r.Path, i, handlerName)
+			}
+		}
+	}
 }

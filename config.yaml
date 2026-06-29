@@ -51,3 +51,27 @@ endpoints:
     interval: 1h
     conditions:
       - "[DOMAIN_EXPIRATION] > 720h"
+    alerts:
+      - type: email
+        description: "healthcheck failed"
+        send-on-resolved: true  
+
+storage:
+  type: postgres
+  path: "postgres://postgres:postgres@127.0.0.1:5432/ticket_system?sslmode=disable"
+
+alerting:
+  email:
+    from: "from@example.com"
+    username: "from@example.com"
+    password: "hunter2"
+    host: "mail.example.com"
+    port: 587
+    to: "recipient1@example.com,recipient2@example.com"
+    client:
+      insecure: false
+    # You can also add group-specific to keys, which will
+    # override the to key above for the specified groups
+    overrides:
+      - group: "core"
+        to: "recipient3@example.com,recipient4@example.com"

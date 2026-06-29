@@ -105,6 +105,7 @@ func NewStore(driver, path string, caching bool, maximumNumberOfResults, maximum
 }
 
 // createSchema creates the schema required to perform all database operations.
+// createSchema 创建表结构
 func (s *Store) createSchema() error {
 	if s.driver == "sqlite" {
 		return s.createSQLiteSchema()
@@ -119,13 +120,16 @@ func (s *Store) GetAllEndpointStatuses(params *paging.EndpointStatusParams) ([]*
 	if err != nil {
 		return nil, err
 	}
+	// 从 endpoints 中读取所有的 key
 	keys, err := s.getAllEndpointKeys(tx)
 	if err != nil {
 		_ = tx.Rollback()
 		return nil, err
 	}
+
 	endpointStatuses := make([]*endpoint.Status, 0, len(keys))
 	for _, key := range keys {
+		// 按 key 获取 endpoint
 		endpointStatus, err := s.getEndpointStatusByKey(tx, key, params)
 		if err != nil {
 			continue
@@ -145,16 +149,18 @@ func (s *Store) GetEndpointStatus(groupName, endpointName string, params *paging
 
 // GetEndpointStatusByKey returns the endpoint status for a given key
 func (s *Store) GetEndpointStatusByKey(key string, params *paging.EndpointStatusParams) (*endpoint.Status, error) {
+	// 开启事务
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
 	}
+	// 读取数据
 	endpointStatus, err := s.getEndpointStatusByKey(tx, key, params)
 	if err != nil {
-		_ = tx.Rollback()
+		_ = tx.Rollback() // 有错误回滚
 		return nil, err
 	}
-	if err = tx.Commit(); err != nil {
+	if err = tx.Commit(); err != nil { // 提交事务
 		_ = tx.Rollback()
 	}
 	return endpointStatus, err
@@ -241,6 +247,7 @@ func (s *Store) InsertEndpointResult(ep *endpoint.Endpoint, result *endpoint.Res
 	if err != nil {
 		return err
 	}
+	// 匹配 endpoints 中的 id
 	endpointID, err := s.getEndpointID(tx, ep)
 	if err != nil {
 		if errors.Is(err, common.ErrEndpointNotFound) {
@@ -265,12 +272,13 @@ func (s *Store) InsertEndpointResult(ep *endpoint.Endpoint, result *endpoint.Res
 	// 2. The lastResult.Success != result.Success. This implies that the endpoint went from healthy to unhealthy or
 	//    vice versa, in which case we will have to create a new event of type EventHealthy or EventUnhealthy
 	//	  based on result.Success.
+	// 查找该 id 的时间数
 	numberOfEvents, err := s.getNumberOfEventsByEndpointID(tx, endpointID)
 	if err != nil {
 		// Silently fail
 		logr.Errorf("[sql.InsertEndpointResult] Failed to retrieve total number of events for endpoint with key=%s: %s", ep.Key(), err.Error())
 	}
-	if numberOfEvents == 0 {
+	if numberOfEvents == 0 { // 还没有事件时，意味着需要插入 start 以及 healthy/unhealthy 事件
 		// There's no events yet, which means we need to add the EventStart and the first healthy/unhealthy event
 		err = s.insertEndpointEvent(tx, endpointID, &endpoint.Event{
 			Type:      endpoint.EventStart,
@@ -296,7 +304,7 @@ func (s *Store) InsertEndpointResult(ep *endpoint.Endpoint, result *endpoint.Res
 			// If the final outcome (success or failure) of the previous and the new result aren't the same, it means
 			// that the endpoint either went from Healthy to Unhealthy or Unhealthy -> Healthy, therefore, we'll add
 			// an event to mark the change in state
-			if lastResultSuccess != result.Success {
+			if lastResultSuccess != result.Success { // 如果本次和上次的状态不一致，则需要插入新的 event
 				event := endpoint.NewEventFromResult(result)
 				if err = s.insertEndpointEvent(tx, endpointID, event); err != nil {
 					// Silently fail
@@ -307,24 +315,24 @@ func (s *Store) InsertEndpointResult(ep *endpoint.Endpoint, result *endpoint.Res
 		// Clean up old events if we're above the threshold
 		// This lets us both keep the table clean without impacting performance too much
 		// (since we're only deleting MaximumNumberOfEvents at a time instead of 1)
-		if numberOfEvents > int64(s.maximumNumberOfEvents+eventsAboveMaximumCleanUpThreshold) {
+		if numberOfEvents > int64(s.maximumNumberOfEvents+eventsAboveMaximumCleanUpThreshold) { // 当已有事件数超过了上限，则清除老旧的事件
 			if err = s.deleteOldEndpointEvents(tx, endpointID); err != nil {
 				logr.Errorf("[sql.InsertEndpointResult] Failed to delete old events for endpoint with key=%s: %s", ep.Key(), err.Error())
 			}
 		}
 	}
 	// Second, we need to insert the result.
-	if err = s.insertEndpointResult(tx, endpointID, result); err != nil {
+	if err = s.insertEndpointResult(tx, endpointID, result); err != nil { // 保存本次的检查结果
 		logr.Errorf("[sql.InsertEndpointResult] Failed to insert result for endpoint with key=%s: %s", ep.Key(), err.Error())
 		_ = tx.Rollback() // If we can't insert the result, we'll rollback now since there's no point continuing
 		return err
 	}
 	// Clean up old results
-	numberOfResults, err := s.getNumberOfResultsByEndpointID(tx, endpointID)
+	numberOfResults, err := s.getNumberOfResultsByEndpointID(tx, endpointID) // 检查结果数
 	if err != nil {
 		logr.Errorf("[sql.InsertEndpointResult] Failed to retrieve total number of results for endpoint with key=%s: %s", ep.Key(), err.Error())
 	} else {
-		if numberOfResults > int64(s.maximumNumberOfResults+resultsAboveMaximumCleanUpThreshold) {
+		if numberOfResults > int64(s.maximumNumberOfResults+resultsAboveMaximumCleanUpThreshold) { // 当已有结果超过了上限，则清除老旧的结果
 			if err = s.deleteOldEndpointResults(tx, endpointID); err != nil {
 				logr.Errorf("[sql.InsertEndpointResult] Failed to delete old results for endpoint with key=%s: %s", ep.Key(), err.Error())
 			}
@@ -332,16 +340,16 @@ func (s *Store) InsertEndpointResult(ep *endpoint.Endpoint, result *endpoint.Res
 	}
 	// Finally, we need to insert the uptime data.
 	// Because the uptime data significantly outlives the results, we can't rely on the results for determining the uptime
-	if err = s.updateEndpointUptime(tx, endpointID, result); err != nil {
+	if err = s.updateEndpointUptime(tx, endpointID, result); err != nil { // 更新响应时间
 		logr.Errorf("[sql.InsertEndpointResult] Failed to update uptime for endpoint with key=%s: %s", ep.Key(), err.Error())
 	}
 	// Merge hourly uptime entries that can be merged into daily entries and clean up old uptime entries
-	numberOfUptimeEntries, err := s.getNumberOfUptimeEntriesByEndpointID(tx, endpointID)
+	numberOfUptimeEntries, err := s.getNumberOfUptimeEntriesByEndpointID(tx, endpointID) // 检查 uptimes 数
 	if err != nil {
 		logr.Errorf("[sql.InsertEndpointResult] Failed to retrieve total number of uptime entries for endpoint with key=%s: %s", ep.Key(), err.Error())
 	} else {
 		// Merge older hourly uptime entries into daily uptime entries if we have more than uptimeTotalEntriesMergeThreshold
-		if numberOfUptimeEntries >= uptimeTotalEntriesMergeThreshold {
+		if numberOfUptimeEntries >= uptimeTotalEntriesMergeThreshold { // 当已有 uptimes 数超过了合并阈值，则进行合并
 			logr.Infof("[sql.InsertEndpointResult] Merging hourly uptime entries for endpoint with key=%s; This is a lot of work, it shouldn't happen too often", ep.Key())
 			if err = s.mergeHourlyUptimeEntriesOlderThanMergeThresholdIntoDailyUptimeEntries(tx, endpointID); err != nil {
 				logr.Errorf("[sql.InsertEndpointResult] Failed to merge hourly uptime entries for endpoint with key=%s: %s", ep.Key(), err.Error())
@@ -351,17 +359,17 @@ func (s *Store) InsertEndpointResult(ep *endpoint.Endpoint, result *endpoint.Res
 	// Clean up outdated uptime entries
 	// In most cases, this would be handled by mergeHourlyUptimeEntriesOlderThanMergeThresholdIntoDailyUptimeEntries,
 	// but if Gatus was temporarily shut down, we might have some old entries that need to be cleaned up
-	ageOfOldestUptimeEntry, err := s.getAgeOfOldestEndpointUptimeEntry(tx, endpointID)
+	ageOfOldestUptimeEntry, err := s.getAgeOfOldestEndpointUptimeEntry(tx, endpointID) // 读取最旧的 endpoint_uptimes 记录
 	if err != nil {
 		logr.Errorf("[sql.InsertEndpointResult] Failed to retrieve oldest endpoint uptime entry for endpoint with key=%s: %s", ep.Key(), err.Error())
 	} else {
-		if ageOfOldestUptimeEntry > uptimeAgeCleanUpThreshold {
+		if ageOfOldestUptimeEntry > uptimeAgeCleanUpThreshold { // 如果超过了清理阈值，则进行删除
 			if err = s.deleteOldUptimeEntries(tx, endpointID, time.Now().Add(-(uptimeRetention + time.Hour))); err != nil {
 				logr.Errorf("[sql.InsertEndpointResult] Failed to delete old uptime entries for endpoint with key=%s: %s", ep.Key(), err.Error())
 			}
 		}
 	}
-	if s.writeThroughCache != nil {
+	if s.writeThroughCache != nil { // 检查是否写入缓存
 		cacheKeysToRefresh := s.writeThroughCache.GetKeysByPattern(ep.Key()+"*", 0)
 		for _, cacheKey := range cacheKeysToRefresh {
 			s.writeThroughCache.Delete(cacheKey)
@@ -710,7 +718,7 @@ func (s *Store) getAllEndpointKeys(tx *sql.Tx) (keys []string, err error) {
 
 func (s *Store) getEndpointStatusByKey(tx *sql.Tx, key string, parameters *paging.EndpointStatusParams) (*endpoint.Status, error) {
 	var cacheKey string
-	if s.writeThroughCache != nil {
+	if s.writeThroughCache != nil { // 从缓存中读取数据
 		cacheKey = generateCacheKey(key, parameters)
 		if cachedEndpointStatus, exists := s.writeThroughCache.Get(cacheKey); exists {
 			if castedCachedEndpointStatus, ok := cachedEndpointStatus.(*endpoint.Status); ok {
@@ -718,22 +726,24 @@ func (s *Store) getEndpointStatusByKey(tx *sql.Tx, key string, parameters *pagin
 			}
 		}
 	}
+	// 查询该 key 的 id, group, name 信息
 	endpointID, group, endpointName, err := s.getEndpointIDGroupAndNameByKey(tx, key)
 	if err != nil {
 		return nil, err
 	}
 	endpointStatus := endpoint.NewStatus(group, endpointName)
-	if parameters.EventsPageSize > 0 {
+	if parameters.EventsPageSize > 0 { // 此处用于检查是否要读取 endpoint_events 信息，对于列表页不需要，对于详情页需要
+		//
 		if endpointStatus.Events, err = s.getEndpointEventsByEndpointID(tx, endpointID, parameters.EventsPage, parameters.EventsPageSize); err != nil {
 			logr.Errorf("[sql.getEndpointStatusByKey] Failed to retrieve events for key=%s: %s", key, err.Error())
 		}
 	}
-	if parameters.ResultsPageSize > 0 {
+	if parameters.ResultsPageSize > 0 { // 此处用于检查是否要读取 endpoint_results 信息，对于列表和详情页均需要
 		if endpointStatus.Results, err = s.getEndpointResultsByEndpointID(tx, endpointID, parameters.ResultsPage, parameters.ResultsPageSize); err != nil {
 			logr.Errorf("[sql.getEndpointStatusByKey] Failed to retrieve results for key=%s: %s", key, err.Error())
 		}
 	}
-	if s.writeThroughCache != nil {
+	if s.writeThroughCache != nil { // 写入缓存
 		s.writeThroughCache.SetWithTTL(cacheKey, endpointStatus, cacheTTL)
 	}
 	return endpointStatus, nil

@@ -82,7 +82,8 @@ func handleAlertsToTrigger(ep *endpoint.Endpoint, result *endpoint.Result, alert
 
 func handleAlertsToResolve(ep *endpoint.Endpoint, result *endpoint.Result, alertingConfig *alerting.Config) {
 	ep.NumberOfSuccessesInARow++
-	for _, endpointAlert := range ep.Alerts {
+	for _, endpointAlert := range ep.Alerts { // 检查该 endpoint 下所有的告警
+		// 1.检查成功率阈值是否满足
 		isStillBelowSuccessThreshold := endpointAlert.SuccessThreshold > ep.NumberOfSuccessesInARow
 		if isStillBelowSuccessThreshold && endpointAlert.IsEnabled() && endpointAlert.Triggered {
 			// Persist NumberOfSuccessesInARow
@@ -96,16 +97,19 @@ func handleAlertsToResolve(ep *endpoint.Endpoint, result *endpoint.Result, alert
 		// Even if the alert provider returns an error, we still set the alert's Triggered variable to false.
 		// Further explanation can be found on Alert's Triggered field.
 		endpointAlert.Triggered = false
+		// 
 		if err := store.Get().DeleteTriggeredEndpointAlert(ep, endpointAlert); err != nil {
 			logr.Errorf("[watchdog.handleAlertsToResolve] Failed to delete persisted triggered endpoint alert for endpoint with key=%s: %s", ep.Key(), err.Error())
 		}
-		if !endpointAlert.IsSendingOnResolved() {
+		if !endpointAlert.IsSendingOnResolved() { // 检查是否开启了 sendingOnResolved，如果未开启，则打印日志并退出
 			logr.Debugf("[watchdog.handleAlertsToResolve] Not sending request to provider of alert with type=%s for endpoint with key=%s despite being RESOLVED, because send-on-resolved is set to false", endpointAlert.Type, ep.Key())
 			continue
 		}
+		// 获取告警实现
 		alertProvider := alertingConfig.GetAlertingProviderByAlertType(endpointAlert.Type)
 		if alertProvider != nil {
 			logr.Infof("[watchdog.handleAlertsToResolve] Sending %s alert because alert for endpoint with key=%s with description='%s' has been RESOLVED", endpointAlert.Type, ep.Key(), endpointAlert.GetDescription())
+			// 发送告警通知
 			err := alertProvider.Send(ep, endpointAlert, result, true)
 			if err != nil {
 				logr.Errorf("[watchdog.handleAlertsToResolve] Failed to send an alert for endpoint with key=%s: %s", ep.Key(), err.Error())

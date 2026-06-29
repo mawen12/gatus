@@ -44,43 +44,43 @@ func (c Condition) evaluate(result *Result, dontResolveFailedConditions bool, re
 		}
 		return !dontResolveFailedConditions
 	}
-	if strings.Contains(condition, " == ") {
+	if strings.Contains(condition, " == ") { // 等值
 		parameters, resolvedParameters := sanitizeAndResolveWithContext(strings.Split(condition, " == "), result, context)
 		success = isEqual(resolvedParameters[0], resolvedParameters[1])
 		if shouldResolveCondition(success) {
 			conditionToDisplay = prettify(parameters, resolvedParameters, "==")
 		}
-	} else if strings.Contains(condition, " != ") {
+	} else if strings.Contains(condition, " != ") { // 不等值
 		parameters, resolvedParameters := sanitizeAndResolveWithContext(strings.Split(condition, " != "), result, context)
 		success = !isEqual(resolvedParameters[0], resolvedParameters[1])
 		if shouldResolveCondition(success) {
 			conditionToDisplay = prettify(parameters, resolvedParameters, "!=")
 		}
-	} else if strings.Contains(condition, " <= ") {
+	} else if strings.Contains(condition, " <= ") { // 小于等于
 		parameters, resolvedParameters := sanitizeAndResolveNumericalWithContext(strings.Split(condition, " <= "), result, context)
 		success = resolvedParameters[0] <= resolvedParameters[1]
 		if shouldResolveCondition(success) {
 			conditionToDisplay = prettifyNumericalParameters(parameters, resolvedParameters, "<=")
 		}
-	} else if strings.Contains(condition, " >= ") {
+	} else if strings.Contains(condition, " >= ") { // 大于等于
 		parameters, resolvedParameters := sanitizeAndResolveNumericalWithContext(strings.Split(condition, " >= "), result, context)
 		success = resolvedParameters[0] >= resolvedParameters[1]
 		if shouldResolveCondition(success) {
 			conditionToDisplay = prettifyNumericalParameters(parameters, resolvedParameters, ">=")
 		}
-	} else if strings.Contains(condition, " > ") {
+	} else if strings.Contains(condition, " > ") { // 大于
 		parameters, resolvedParameters := sanitizeAndResolveNumericalWithContext(strings.Split(condition, " > "), result, context)
 		success = resolvedParameters[0] > resolvedParameters[1]
 		if shouldResolveCondition(success) {
 			conditionToDisplay = prettifyNumericalParameters(parameters, resolvedParameters, ">")
 		}
-	} else if strings.Contains(condition, " < ") {
+	} else if strings.Contains(condition, " < ") { // 小于
 		parameters, resolvedParameters := sanitizeAndResolveNumericalWithContext(strings.Split(condition, " < "), result, context)
 		success = resolvedParameters[0] < resolvedParameters[1]
 		if shouldResolveCondition(success) {
 			conditionToDisplay = prettifyNumericalParameters(parameters, resolvedParameters, "<")
 		}
-	} else {
+	} else { // 非法表达式
 		result.AddError(fmt.Sprintf("invalid condition: %s", condition))
 		return false
 	}
