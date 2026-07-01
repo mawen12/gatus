@@ -3583,7 +3583,8 @@ Gatus provides a simple read-only API that can be queried in order to programmat
 All endpoints are available via a GET request to the following endpoint:
 ```
 /api/v1/endpoints/statuses
-````
+# TODO by mawen this format is error, should use 3 个 `
+```
 Example: https://status.twin.sh/api/v1/endpoints/statuses
 
 Specific endpoints can also be queried by using the following pattern:

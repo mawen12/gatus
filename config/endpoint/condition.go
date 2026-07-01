@@ -44,37 +44,40 @@ func (c Condition) evaluate(result *Result, dontResolveFailedConditions bool, re
 		}
 		return !dontResolveFailedConditions
 	}
-	if strings.Contains(condition, " == ") {
+	if strings.Contains(condition, " == ") { // == 等值
+		// 输入 condition: [STATUS] == 200，拆分后结果为：[[STATUS], 200]
+		// 输出 parameters: 
+		// 输出 resolvedParameters: []
 		parameters, resolvedParameters := sanitizeAndResolveWithContext(strings.Split(condition, " == "), result, context)
 		success = isEqual(resolvedParameters[0], resolvedParameters[1])
 		if shouldResolveCondition(success) {
 			conditionToDisplay = prettify(parameters, resolvedParameters, "==")
 		}
-	} else if strings.Contains(condition, " != ") {
+	} else if strings.Contains(condition, " != ") { // !=
 		parameters, resolvedParameters := sanitizeAndResolveWithContext(strings.Split(condition, " != "), result, context)
 		success = !isEqual(resolvedParameters[0], resolvedParameters[1])
 		if shouldResolveCondition(success) {
 			conditionToDisplay = prettify(parameters, resolvedParameters, "!=")
 		}
-	} else if strings.Contains(condition, " <= ") {
+	} else if strings.Contains(condition, " <= ") { // <=
 		parameters, resolvedParameters := sanitizeAndResolveNumericalWithContext(strings.Split(condition, " <= "), result, context)
 		success = resolvedParameters[0] <= resolvedParameters[1]
 		if shouldResolveCondition(success) {
 			conditionToDisplay = prettifyNumericalParameters(parameters, resolvedParameters, "<=")
 		}
-	} else if strings.Contains(condition, " >= ") {
+	} else if strings.Contains(condition, " >= ") { // >=
 		parameters, resolvedParameters := sanitizeAndResolveNumericalWithContext(strings.Split(condition, " >= "), result, context)
 		success = resolvedParameters[0] >= resolvedParameters[1]
 		if shouldResolveCondition(success) {
 			conditionToDisplay = prettifyNumericalParameters(parameters, resolvedParameters, ">=")
 		}
-	} else if strings.Contains(condition, " > ") {
+	} else if strings.Contains(condition, " > ") { // >
 		parameters, resolvedParameters := sanitizeAndResolveNumericalWithContext(strings.Split(condition, " > "), result, context)
 		success = resolvedParameters[0] > resolvedParameters[1]
 		if shouldResolveCondition(success) {
 			conditionToDisplay = prettifyNumericalParameters(parameters, resolvedParameters, ">")
 		}
-	} else if strings.Contains(condition, " < ") {
+	} else if strings.Contains(condition, " < ") { // <
 		parameters, resolvedParameters := sanitizeAndResolveNumericalWithContext(strings.Split(condition, " < "), result, context)
 		success = resolvedParameters[0] < resolvedParameters[1]
 		if shouldResolveCondition(success) {
@@ -175,6 +178,7 @@ func sanitizeAndResolveWithContext(elements []string, result *Result, context *g
 	parameters := make([]string, len(elements))
 	resolvedParameters := make([]string, len(elements))
 	for i, element := range elements {
+		// 移除前后空格
 		element = strings.TrimSpace(element)
 		parameters[i] = element
 

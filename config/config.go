@@ -240,6 +240,7 @@ func LoadConfiguration(configPath string) (*Config, error) {
 	} else {
 		logr.Infof("[config.LoadConfiguration] Reading configuration from configFile=%s", usedConfigPath)
 		if data, err := os.ReadFile(usedConfigPath); err != nil {
+			// TODO by mawen This shoudl be file not directory
 			return nil, fmt.Errorf("error reading configuration from directory %s: %w", usedConfigPath, err)
 		} else {
 			configBytes = data
@@ -477,6 +478,7 @@ func ValidateEndpointsConfig(config *Config) error {
 	for _, ep := range config.Endpoints {
 		logr.Debugf("[config.ValidateEndpointsConfig] Validating endpoint with key %s", ep.Key())
 		if endpointKey := ep.Key(); duplicateValidationMap[endpointKey] {
+			// TODO by mawen 无需重新计算，直接复用即可
 			return fmt.Errorf("invalid endpoint %s: name and group combination must be unique", ep.Key())
 		} else {
 			duplicateValidationMap[endpointKey] = true

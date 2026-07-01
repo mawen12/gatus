@@ -124,6 +124,7 @@ const (
 //
 // Case-insensitive: All placeholder names are handled case-insensitively, but paths preserve original case.
 func ResolvePlaceholder(placeholder string, result *Result, ctx *gontext.Gontext) (string, error) {
+	// 去除前后空格
 	placeholder = strings.TrimSpace(placeholder)
 	originalPlaceholder := placeholder
 
@@ -132,28 +133,30 @@ func ResolvePlaceholder(placeholder string, result *Result, ctx *gontext.Gontext
 	placeholder = innerPlaceholder
 
 	// Handle CONTEXT placeholders
+	// 统一转换为大写
 	uppercasePlaceholder := strings.ToUpper(placeholder)
+	// 检查是否包含 [CONTEXT]
 	if strings.HasPrefix(uppercasePlaceholder, ContextPlaceholder) && ctx != nil {
 		return resolveContextPlaceholder(placeholder, fn, originalPlaceholder, ctx)
 	}
 
 	// Handle basic placeholders (try uppercase first for backward compatibility)
 	switch uppercasePlaceholder {
-	case StatusPlaceholder:
+	case StatusPlaceholder: // [STATUS]
 		return formatWithFunction(strconv.Itoa(result.HTTPStatus), fn), nil
-	case IPPlaceholder:
+	case IPPlaceholder: // [IP]
 		return formatWithFunction(result.IP, fn), nil
-	case ResponseTimePlaceholder:
+	case ResponseTimePlaceholder: // [RESPONSE_TIME]
 		return formatWithFunction(strconv.FormatInt(result.Duration.Milliseconds(), 10), fn), nil
-	case DNSRCodePlaceholder:
+	case DNSRCodePlaceholder: // [DNSR_CODE]
 		return formatWithFunction(result.DNSRCode, fn), nil
-	case ConnectedPlaceholder:
+	case ConnectedPlaceholder: // [CONNECTED]
 		return formatWithFunction(strconv.FormatBool(result.Connected), fn), nil
-	case CertificateExpirationPlaceholder:
+	case CertificateExpirationPlaceholder: // [CERTIFICATE_EXPIRATION]
 		return formatWithFunction(strconv.FormatInt(result.CertificateExpiration.Milliseconds(), 10), fn), nil
-	case DomainExpirationPlaceholder:
+	case DomainExpirationPlaceholder: // [DOMAIN_EXPIRATION]
 		return formatWithFunction(strconv.FormatInt(result.DomainExpiration.Milliseconds(), 10), fn), nil
-	case BodyPlaceholder:
+	case BodyPlaceholder: // [BODY]
 		body := strings.TrimSpace(string(result.Body))
 		if fn == functionHas {
 			return strconv.FormatBool(len(body) > 0), nil
@@ -172,6 +175,7 @@ func ResolvePlaceholder(placeholder string, result *Result, ctx *gontext.Gontext
 	}
 
 	// Handle JSONPath expressions on BODY (including array indexing)
+	// .考虑的是JSON对象，[考虑的是JSON数组
 	if strings.HasPrefix(uppercasePlaceholder, BodyPlaceholder+".") || strings.HasPrefix(uppercasePlaceholder, BodyPlaceholder+"[") {
 		return resolveJSONPathPlaceholder(placeholder, fn, originalPlaceholder, result)
 	}
@@ -191,12 +195,17 @@ func ResolvePlaceholder(placeholder string, result *Result, ctx *gontext.Gontext
 }
 
 // extractFunctionWrapper detects and extracts function wrappers (len, has)
+// extractFunctionWrapper 解析 has(placeholder) 和 len(placeholder) ，返回使用的函数和 placholder
 func extractFunctionWrapper(placeholder string) (functionType, string) {
+	// 检查是否以 len() 作为开头和结束
 	if strings.HasPrefix(placeholder, LengthFunctionPrefix) && strings.HasSuffix(placeholder, FunctionSuffix) {
+		// 去除 len()
 		inner := strings.TrimSuffix(strings.TrimPrefix(placeholder, LengthFunctionPrefix), FunctionSuffix)
 		return functionLen, inner
 	}
+	// 检查是否以 has() 作为开头和结束
 	if strings.HasPrefix(placeholder, HasFunctionPrefix) && strings.HasSuffix(placeholder, FunctionSuffix) {
+		// 去除 has()
 		inner := strings.TrimSuffix(strings.TrimPrefix(placeholder, HasFunctionPrefix), FunctionSuffix)
 		return functionHas, inner
 	}
